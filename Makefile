@@ -4,3 +4,6 @@ setup:
 
 data: src/data.py
 	. .venv/bin/activate && python src/data.py
+
+data-parallel: src/data.py
+	. .venv/bin/activate && python src/data-parallel.py
