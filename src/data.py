@@ -143,7 +143,7 @@ def process_opcode_gas_for_block_range(
         if block_height % save_freq == save_freq - 1:  # save and reset
             out_file = os.path.join(
                 out_dir,
-                f"opcode_gas_usage_{block_height-save_freq-1}_{block_height}.csv",
+                f"opcode_gas_usage_{block_height-save_freq+1}_{block_height}.csv",
             )
             df.to_csv(out_file, index=False)
             df = pd.DataFrame()
@@ -170,7 +170,7 @@ def main():
         secrets_dict = json.load(file)
     # Block heights
     block_start = 22000000  # Mar-08-2025
-    block_count = 6000  # ~1 day of ETH blocks
+    block_count = 12  # ~1 day of ETH blocks
     # Save and checkpoint
     save_freq = 10
     process_opcode_gas_for_block_range(
