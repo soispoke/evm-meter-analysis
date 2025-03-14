@@ -1,3 +1,4 @@
+import os
 import json
 import requests
 import numpy as np
@@ -98,10 +99,11 @@ def post_trace_request(
             data=json.dumps(payload),
             stream=True,
         )
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print(f"-Transaction trace failed: {tx_hash}")
-        print(f"--An error occurred while making the request: {e}")
-        return str()
+        print(f"--An error occurred while making the request: {type(e)}: {e}")
+        return ""
+
     if response.status_code != 200:
         print(f"-Transaction trace failed: {tx_hash}")
         print(
@@ -120,18 +122,62 @@ def post_trace_request(
     return response_str
 
 
-if __name__ == "__main__":
-    import os
+def process_opcode_gas_for_block_range(
+    block_start: int,
+    block_count: int,
+    secrets_dict: dict,
+    out_dir: str,
+    save_freq: int,
+    checkpoint_freq: int,
+):
+    df = pd.DataFrame()
+    for block_height in range(block_start, block_start + block_count):
+        block_df = get_opcode_gas_for_block(
+            block_height,
+            secrets_dict["xatu_username"],
+            secrets_dict["xatu_password"],
+            secrets_dict["erigon_username"],
+            secrets_dict["erigon_password"],
+        )
+        df = pd.concat([df, block_df], ignore_index=True)
+        if block_height % save_freq == save_freq - 1:  # save and reset
+            out_file = os.path.join(
+                out_dir,
+                f"opcode_gas_usage_{block_height-save_freq-1}_{block_height}.csv",
+            )
+            df.to_csv(out_file, index=False)
+            df = pd.DataFrame()
+        elif block_height % checkpoint_freq == checkpoint_freq - 1:  # checkpoint
+            temp_file = os.path.join(out_dir, f"opcode_gas_usage_temp.csv")
+            df.to_csv(temp_file, index=False)
+    # Save last loop, if block counts is not divisible by save_freq
+    last_block_height = block_start + block_count - 1
+    last_mod = last_block_height % save_freq
+    if last_mod != save_freq - 1:
+        out_file = os.path.join(
+            out_dir,
+            f"opcode_gas_usage_{block_height-last_mod}_{last_block_height}.csv",
+        )
+        df.to_csv(out_file, index=False)
 
-    with open(os.path.join("secrets.json"), "r") as file:
+
+def main():
+    # Directories
+    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    data_dir = os.path.join(repo_dir, "data")
+    # Secrets for acessing xatu clickhouse and erigon
+    with open(os.path.join(repo_dir, "secrets.json"), "r") as file:
         secrets_dict = json.load(file)
-
-    fast_tx_hash = "0xe6bfa9f831f20ae8c813aae2222197db27b8f081b8e303247d8923f60db39c40"
-    slow_tx_hash = "0xd1c193ec07f6bba8e814431d4f6caaf02ac98707ef99c42c77260996665f2ea1"
-
-    df = get_opcode_gas_for_tx(
-        fast_tx_hash, secrets_dict["erigon_username"], secrets_dict["erigon_password"]
+    # Block heights
+    block_start = 22000000  # Mar-08-2025
+    block_count = 6000  # ~1 day of ETH blocks
+    # Save and checkpoint
+    save_freq = 50
+    checkpoint_freq = 10
+    process_opcode_gas_for_block_range(
+        block_start, block_count, secrets_dict, data_dir, save_freq, checkpoint_freq
     )
-    df = get_opcode_gas_for_tx(
-        slow_tx_hash, secrets_dict["erigon_username"], secrets_dict["erigon_password"]
-    )
+
+
+if __name__ == "__main__":
+    main()
