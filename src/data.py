@@ -13,6 +13,7 @@ def get_opcode_gas_for_block(
     xatu_pass: str,
     erigon_user: str,
     erigon_pass: str,
+    response_max_size: int = 1e10,
 ) -> pd.DataFrame:
     query = text(
         """
@@ -35,7 +36,7 @@ def get_opcode_gas_for_block(
     for tx_hash in tqdm(
         hash_df["transaction_hash"].values, desc=f"Processing block {block_height}"
     ):
-        tx_op_df = get_opcode_gas_for_tx(tx_hash, erigon_user, erigon_pass)
+        tx_op_df = get_opcode_gas_for_tx(tx_hash, erigon_user, erigon_pass, response_max_size)
         op_df = pd.concat([op_df, tx_op_df], ignore_index=True)
     op_df["block_height"] = block_height
     return op_df
@@ -129,6 +130,7 @@ def process_opcode_gas_for_block_range(
     out_dir: str,
     save_freq: int,
     checkpoint_freq: int = np.inf,  # default -> no checkpointing
+    response_max_size: int = 1e10,
 ):
     df = pd.DataFrame()
     for block_height in range(block_start, block_start + block_count):
@@ -138,6 +140,7 @@ def process_opcode_gas_for_block_range(
             secrets_dict["xatu_password"],
             secrets_dict["erigon_username"],
             secrets_dict["erigon_password"],
+            response_max_size,
         )
         df = pd.concat([df, block_df], ignore_index=True)
         if block_height % save_freq == save_freq - 1:  # save and reset
@@ -169,8 +172,10 @@ def main():
     with open(os.path.join(repo_dir, "secrets.json"), "r") as file:
         secrets_dict = json.load(file)
     # Block heights
-    block_start = 22000000  # Mar-08-2025
-    block_count = 12  # ~1 day of ETH blocks
+    block_start = 22000020  # Mar-08-2025
+    block_count = 6000  # ~1 day of ETH blocks
+    # Response max size
+    response_max_size = 1e9
     # Save and checkpoint
     save_freq = 10
     process_opcode_gas_for_block_range(
@@ -179,6 +184,7 @@ def main():
         secrets_dict,
         data_dir,
         save_freq,
+        response_max_size,
     )
 
 
