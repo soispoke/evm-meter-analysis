@@ -128,7 +128,7 @@ def process_opcode_gas_for_block_range(
     secrets_dict: dict,
     out_dir: str,
     save_freq: int,
-    checkpoint_freq: int,
+    checkpoint_freq: int = np.inf,  # default -> no checkpointing
 ):
     df = pd.DataFrame()
     for block_height in range(block_start, block_start + block_count):
@@ -172,10 +172,13 @@ def main():
     block_start = 22000000  # Mar-08-2025
     block_count = 6000  # ~1 day of ETH blocks
     # Save and checkpoint
-    save_freq = 50
-    checkpoint_freq = 10
+    save_freq = 10
     process_opcode_gas_for_block_range(
-        block_start, block_count, secrets_dict, data_dir, save_freq, checkpoint_freq
+        block_start,
+        block_count,
+        secrets_dict,
+        data_dir,
+        save_freq,
     )
 
 
