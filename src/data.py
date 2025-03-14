@@ -32,6 +32,12 @@ def get_opcode_gas_for_block(
         {"start_block": block_height, "end_block": block_height, "network": "mainnet"},
     )
     hash_df = pd.DataFrame(query_result.fetchall())
+    if hash_df.empty:
+        print(f"-No transactions found for block {block_height}")
+        empty_df = pd.DataFrame(
+            {"op": [str()], "gas_cost": [np.nan], "count": [np.nan], "tx_hash": [str()], "block_height": [block_height]}
+        )
+        return empty_df
     op_df = pd.DataFrame()
     for tx_hash in tqdm(
         hash_df["transaction_hash"].values, desc=f"Processing block {block_height}"
@@ -172,7 +178,7 @@ def main():
     with open(os.path.join(repo_dir, "secrets.json"), "r") as file:
         secrets_dict = json.load(file)
     # Block heights
-    block_start = 22000020  # Mar-08-2025
+    block_start = 22000000  # Mar-08-2025
     block_count = 6000  # ~1 day of ETH blocks
     # Response max size
     response_max_size = 1e9
@@ -185,7 +191,7 @@ def main():
         data_dir,
         save_freq,
         response_max_size,
-    )
+    ) 
 
 
 if __name__ == "__main__":
