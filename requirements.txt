@@ -24,6 +24,7 @@ debugpy==1.8.12
 decorator==5.2.1
 defusedxml==0.7.1
 distro==1.9.0
+duckdb==1.2.1
 executing==2.2.0
 fastjsonschema==2.21.1
 fonttools==4.56.0
@@ -45,10 +46,10 @@ jsonschema==4.23.0
 jsonschema-specifications==2024.10.1
 jupysql==0.11.0
 jupysql-plugin==0.4.5
-jupyter_client==8.6.3
-jupyter_core==5.7.2
 jupyter-events==0.12.0
 jupyter-lsp==2.2.5
+jupyter_client==8.6.3
+jupyter_core==5.7.2
 jupyter_server==2.15.0
 jupyter_server_terminals==0.5.3
 jupyterlab==4.3.5
@@ -75,7 +76,6 @@ pandocfilters==1.5.1
 parso==0.8.4
 pexpect==4.9.0
 pillow==11.1.0
-pip==25.0
 platformdirs==4.3.6
 ploomber-core==0.2.26
 polars==1.24.0
@@ -101,6 +101,7 @@ requests==2.32.3
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
 rpds-py==0.23.1
+seaborn==0.13.2
 Send2Trash==1.8.3
 setuptools==75.8.0
 six==1.17.0
