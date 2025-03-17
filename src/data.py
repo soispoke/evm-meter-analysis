@@ -119,13 +119,18 @@ def post_trace_request(
         return str()
     size = 0
     response_str = str()
-    for chunk in response.iter_content(1024):
+
+    for chunk in response.iter_content(16384):
         size += len(chunk)
         if size > response_max_size:
             print(f"-Transaction trace failed: {tx_hash}")
             print("--Memory usage exceeded")
             return str()
-        response_str += chunk.decode("utf-8")
+        # Decode chunk, ignoring errors
+        decoded_chunk = chunk.decode("utf-8", errors="ignore")  
+        # Replace sequences of 10 or more zeros or f's with ##
+        #decoded_chunk = re.sub(r"0{10,}|f{10,}", "##", decoded_chunk)  
+        response_str += decoded_chunk
     return response_str
 
 
@@ -173,7 +178,9 @@ def process_opcode_gas_for_block_range(
 def main():
     # Directories
     repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    data_dir = os.path.join(repo_dir, "data")
+    out_dir = os.path.join(repo_dir, "data", "opcode_gas_usage")
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
     # Secrets for acessing xatu clickhouse and erigon
     with open(os.path.join(repo_dir, "secrets.json"), "r") as file:
         secrets_dict = json.load(file)
@@ -188,7 +195,7 @@ def main():
         block_start,
         block_count,
         secrets_dict,
-        data_dir,
+        out_dir,
         save_freq,
         response_max_size,
     ) 
