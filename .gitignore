@@ -176,3 +176,4 @@ cython_debug/
 # Project files
 .DS_Store
 secrets.json
+/data/opcode_gas_usage/*
