@@ -35,14 +35,22 @@ def get_opcode_gas_for_block(
     if hash_df.empty:
         print(f"-No transactions found for block {block_height}")
         empty_df = pd.DataFrame(
-            {"op": [str()], "gas_cost": [np.nan], "count": [np.nan], "tx_hash": [str()], "block_height": [block_height]}
+            {
+                "op": [str()],
+                "gas_cost": [np.nan],
+                "count": [np.nan],
+                "tx_hash": [str()],
+                "block_height": [block_height],
+            }
         )
         return empty_df
     op_df = pd.DataFrame()
     for tx_hash in tqdm(
         hash_df["transaction_hash"].values, desc=f"Processing block {block_height}"
     ):
-        tx_op_df = get_opcode_gas_for_tx(tx_hash, erigon_user, erigon_pass, response_max_size)
+        tx_op_df = get_opcode_gas_for_tx(
+            tx_hash, erigon_user, erigon_pass, response_max_size
+        )
         op_df = pd.concat([op_df, tx_op_df], ignore_index=True)
     op_df["block_height"] = block_height
     return op_df
@@ -52,7 +60,12 @@ def get_opcode_gas_for_tx(
     tx_hash: str, erigon_user: str, erigon_pass: str, response_max_size: int = 1e10
 ) -> pd.DataFrame:
     empty_df = pd.DataFrame(
-        {"op": [str()], "gas_cost": [np.nan], "count": [np.nan], "tx_hash": [tx_hash]}
+        {
+            "op": ["NO_TRACE"],
+            "gas_cost": [np.nan],
+            "count": [np.nan],
+            "tx_hash": [tx_hash],
+        }
     )
     response_str = post_trace_request(
         tx_hash, erigon_user, erigon_pass, response_max_size
@@ -79,6 +92,20 @@ def get_opcode_gas_for_tx(
         return empty_df  # Return empty DataFrame
     # Convert structLogs to DataFrame
     df = pd.DataFrame(struct_logs)
+    #  Fix gasCost for CALL, DELEGATECALL, STATICCALL, and CALLCODE
+    if len(df) > 1:
+        df["gasCost"] = np.where(
+            (df["op"].isin(["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]))
+            & (df["depth"] != df["depth"].shift(-1)),
+            df["gasCost"] - df["gas"].shift(-1),
+            df["gasCost"],
+        )
+        df["gasCost"] = np.where(
+            (df["op"].isin(["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]))
+            & (df["depth"] == df["depth"].shift(-1)),
+            df["gas"] - df["gas"].shift(-1),
+            df["gasCost"],
+        )
     # Count repeated rows for memory efficiency and format final dataframe
     df = df.groupby(["op", "gasCost"]).size().reset_index()
     df.columns = ["op", "gas_cost", "count"]
@@ -127,9 +154,9 @@ def post_trace_request(
             print("--Memory usage exceeded")
             return str()
         # Decode chunk, ignoring errors
-        decoded_chunk = chunk.decode("utf-8", errors="ignore")  
+        decoded_chunk = chunk.decode("utf-8", errors="ignore")
         # Replace sequences of 10 or more zeros or f's with ##
-        #decoded_chunk = re.sub(r"0{10,}|f{10,}", "##", decoded_chunk)  
+        # decoded_chunk = re.sub(r"0{10,}|f{10,}", "##", decoded_chunk)
         response_str += decoded_chunk
     return response_str
 
@@ -157,22 +184,22 @@ def process_opcode_gas_for_block_range(
         if block_height % save_freq == save_freq - 1:  # save and reset
             out_file = os.path.join(
                 out_dir,
-                f"opcode_gas_usage_{block_height-save_freq+1}_{block_height}.csv",
+                f"opcode_gas_usage_{block_height-save_freq+1}_{block_height}.parquet",
             )
-            df.to_csv(out_file, index=False)
+            df.to_parquet(out_file, index=False)
             df = pd.DataFrame()
         elif block_height % checkpoint_freq == checkpoint_freq - 1:  # checkpoint
-            temp_file = os.path.join(out_dir, f"opcode_gas_usage_temp.csv")
-            df.to_csv(temp_file, index=False)
+            temp_file = os.path.join(out_dir, f"opcode_gas_usage_temp.parquet")
+            df.to_parquet(temp_file, index=False)
     # Save last loop, if block counts is not divisible by save_freq
     last_block_height = block_start + block_count - 1
     last_mod = last_block_height % save_freq
     if last_mod != save_freq - 1:
         out_file = os.path.join(
             out_dir,
-            f"opcode_gas_usage_{block_height-last_mod}_{last_block_height}.csv",
+            f"opcode_gas_usage_{block_height-last_mod}_{last_block_height}.parquet",
         )
-        df.to_csv(out_file, index=False)
+        df.to_parquet(out_file, index=False)
 
 
 def main():
@@ -186,7 +213,7 @@ def main():
         secrets_dict = json.load(file)
     # Block heights
     block_start = 22000000  # Mar-08-2025
-    block_count = 6000  # ~1 day of ETH blocks
+    block_count = 22002000 - block_start  # ~1 day of ETH blocks
     # Response max size
     response_max_size = 1e9
     # Save and checkpoint
@@ -198,7 +225,7 @@ def main():
         out_dir,
         save_freq,
         response_max_size,
-    ) 
+    )
 
 
 if __name__ == "__main__":

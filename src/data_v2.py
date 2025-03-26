@@ -244,6 +244,20 @@ class BlockProcessor:
         parquet_file_path = os.path.join(block_dir, f"{tx_hash}.parquet")
         try:
             df = pd.DataFrame(traces)
+            #  Fix gasCost for CALL, DELEGATECALL, STATICCALL, and CALLCODE
+            if len(df) > 1:
+                df["gasCost"] = np.where(
+                    (df["op"].isin(["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]))
+                    & (df["depth"] != df["depth"].shift(-1)),
+                    df["gasCost"] - df["gas"].shift(-1),
+                    df["gasCost"],
+                )
+                df["gasCost"] = np.where(
+                    (df["op"].isin(["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]))
+                    & (df["depth"] == df["depth"].shift(-1)),
+                    df["gas"] - df["gas"].shift(-1),
+                    df["gasCost"],
+                )
             df.to_parquet(parquet_file_path)
             logging.debug(
                 f"Traces written to Parquet for block {block_height}, tx_hash: {tx_hash}"
@@ -313,9 +327,11 @@ def parse_configuration():
         "--data_dir",
         type=str,
         default=os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data"
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "data",
+            "opcode_gas_usage",
         ),
-        help="Data directory (default: ./data). Parquet files will be stored here.",
+        help="Data directory (default: ./data/opcode_gas_usage). Parquet files will be stored here.",
     )
     parser.add_argument(
         "--block_start",
