@@ -1,8 +1,10 @@
+import os
 import duckdb
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import os
+
+pd.options.mode.chained_assignment = None
 
 
 def get_block_height_directories(block_data_dir):
@@ -41,8 +43,9 @@ def get_parquet_path_patterns(block_data_dir):
                     os.path.join(block_height_dir_path, "tx_hash=*/*.parquet")
                 )
             else:
+                block_height = block_height_dir_path.split("/")[-3].split("=")[-1]
                 print(
-                    f"Skipping {block_height_dir_path} because no tx_hash directory found inside."
+                    f"Skipping block {block_height} because no tx_hash directory found inside."
                 )
     return block_dirs
 
@@ -71,7 +74,6 @@ def compute_gas_costs_for_single_tx(df: pd.DataFrame) -> pd.DataFrame:
     Note that this code assume df only contains data for one transaction
     """
     call_list = ["DELEGATECALL", "CALL", "CALLCODE", "STATICCALL", "CREATE", "CREATE2"]
-    return_list = ["RETURN", "STOP", "REVERT"]  # Maybe also SELFDESTRUCT and INVALID
     inner_gas_diff_list = []
     outer_gas_diff_list = []
     for i in range(len(df) - 1):
@@ -79,10 +81,10 @@ def compute_gas_costs_for_single_tx(df: pd.DataFrame) -> pd.DataFrame:
         next_row = df.iloc[i + 1]
         # if the row is a new depth starter
         if (row["op"] in call_list) and (next_row["depth"] != row["depth"]):
-            # Get the associated return-type row: the first return-type opcode within the corresponding depth
+            # Get the next change of depth that is not a call-type
             return_row = df[
                 (df["file_row_number"] > row["file_row_number"])
-                & (df["op"].isin(return_list))
+                & (~df["op"].isin(call_list))
                 & (df["depth"] == row["depth"] + 1)
             ].iloc[0]
             # Get and save the available gas at entry and exit
@@ -105,13 +107,13 @@ def compute_gas_costs_for_single_tx(df: pd.DataFrame) -> pd.DataFrame:
     call_cost_arr = np.array(outer_gas_diff_list + [np.nan]) - np.array(
         inner_gas_diff_list + [np.nan]
     )
-    df["gasCost_v2"] = np.where(df["op"].isin(call_list), call_cost_arr, df["gasCost"])
+    df["op_gas_cost"] = np.where(df["op"].isin(call_list), call_cost_arr, df["gasCost"])
     return df
 
 
 def main():
     # Directories
-    src_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src_dir = os.path.dirname(os.path.abspath(__file__))
     data_dir = os.path.abspath(os.path.join(src_dir, "..", "data"))
     block_data_dir = os.path.join(data_dir, "block_data")
     block_dirs = get_parquet_path_patterns(block_data_dir)
@@ -122,6 +124,20 @@ def main():
     for dirs_chunk in tqdm(
         block_dirs_chunks, total=total_chunks, desc="Processing chunks"
     ):
+        # Define output directory path
+        start_block_height = dirs_chunk[0].split("/")[-3].split("=")[-1]
+        end_block_height = dirs_chunk[-1].split("/")[-3].split("=")[-1]
+        block_range = f"{start_block_height}...{end_block_height}"
+        output_dir = os.path.join(
+            data_dir,
+            "aggregated_opcodes",
+            f"block_range={block_range}",
+        )
+        output_file_path = os.path.join(output_dir, "file.parquet")
+        if os.path.isfile(output_file_path):
+            print(f"Block range {block_range} is already processed. Skipping...")
+            continue
+        # Define query
         query = f"""
         SELECT block_height,
             tx_hash,
@@ -144,24 +160,19 @@ def main():
         clean_df = compute_gas_cost_for_chunk(raw_df)
         # Aggregate data for memory efficiency
         df = (
-            clean_df.groupby(["block_height", "tx_hash", "op", "gasCost_v2"])
+            clean_df.groupby(["block_height", "tx_hash", "op", "op_gas_cost"])
             .size()
             .reset_index()
         )
-        # Determine block range for output directory
-        start_block_height = df["block_height"].min()
-        end_block_height = df["block_height"].max()
-        block_range = f"{start_block_height}...{end_block_height}"
-        # Define output directory path
-        output_dir = os.path.join(
-            data_dir,
-            "processed_data",
-            "aggregated_opcodes",
-            f"block_range={block_range}",
-        )
-        os.makedirs(output_dir, exist_ok=True)
-        output_file_path = os.path.join(output_dir, "file.parquet")
+        df.columns = [
+            "block_height",
+            "tx_hash",
+            "op",
+            "op_gas_cost",
+            "op_gas_pair_count",
+        ]
         # Save DataFrame to parquet
+        os.makedirs(output_dir, exist_ok=True)
         df.to_parquet(output_file_path)
 
 
