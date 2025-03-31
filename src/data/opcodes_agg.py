@@ -71,15 +71,17 @@ def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
     unique_txs = df["tx_hash"].unique()
     new_df = pd.DataFrame()
     for tx_hash in unique_txs:
-        # try:
         tx_df = df[df["tx_hash"] == tx_hash]
-        new_tx_df = compute_gas_costs_for_single_tx(tx_df)
-        new_df = pd.concat([new_df, new_tx_df], ignore_index=True)
-        # except:
-        # Prints the stacktrace for the exception
-        # So that we can see on which line did the exception occur
-        # logging.error(f"Error at transaction: {tx_hash}")
-        # traceback.print_exc()
+        try:
+            new_tx_df = compute_gas_costs_for_single_tx(tx_df)
+        except:
+            logging.error(
+                f"Error at transaction: {tx_hash}. The column op_gas_cost will be set to original gasCost"
+            )
+            traceback.print_exc()
+            new_tx_df = tx_df.copy()
+            new_tx_df["op_gas_cost"] = new_tx_df["gasCost"]
+        new_df = pd.concat([new_df, tx_df], ignore_index=True)
     return new_df
 
 
