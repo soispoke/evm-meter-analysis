@@ -204,7 +204,9 @@ def process_opcode_gas_for_block_range(
 
 def main():
     # Directories
-    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    repo_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
     out_dir = os.path.join(repo_dir, "data", "opcode_gas_usage")
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)

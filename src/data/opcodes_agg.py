@@ -119,7 +119,7 @@ def compute_gas_costs_for_single_tx(df: pd.DataFrame) -> pd.DataFrame:
 def main():
     # Directories
     src_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.abspath(os.path.join(src_dir, "..", "data"))
+    data_dir = os.path.abspath(os.path.join(src_dir, "..", "..", "data"))
     block_data_dir = os.path.join(data_dir, "block_data")
     block_dirs = get_parquet_path_patterns(block_data_dir)
     # block_dirs now contains paths to parquet files in valid block_height directories

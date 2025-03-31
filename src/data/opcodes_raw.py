@@ -327,7 +327,9 @@ def parse_configuration():
         "--data_dir",
         type=str,
         default=os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            os.path.dirname(
+                (os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            ),
             "data",
             "opcode_gas_usage",
         ),
