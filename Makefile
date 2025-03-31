@@ -4,10 +4,8 @@ setup:
 
 opcodes-raw:
 	. .venv/bin/activate && \
-		 rm -f opcodes_raw_out.log && \
-		 python src/data/opcodes_raw.py > opcodes_raw_out.log
+		 python src/data/opcodes_raw.py
 
 opcodes-agg:
 	. .venv/bin/activate && \
-		 rm -f opcodes_agg_out.log && \
-		 python src/data/opcodes_agg.py > opcodes_agg_out.log
+		 python src/data/opcodes_agg.py
