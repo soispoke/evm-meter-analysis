@@ -75,13 +75,15 @@ def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
         try:
             new_tx_df = compute_gas_costs_for_single_tx(tx_df)
         except:
-            logging.error(
-                f"Error at transaction: {tx_hash}. The column op_gas_cost will be set to original gasCost"
-            )
+            logging.error(f"Error at transaction: {tx_hash}")
+            logging.error("Traceback:")
             traceback.print_exc()
             new_tx_df = tx_df.copy()
             new_tx_df["op_gas_cost"] = new_tx_df["gasCost"]
-        new_df = pd.concat([new_df, tx_df], ignore_index=True)
+            logging.error(
+                "The column op_gas_cost will be set to original gasCost. Continuing to process chunk."
+            )
+        new_df = pd.concat([new_df, new_tx_df], ignore_index=True)
     return new_df
 
 
@@ -91,20 +93,14 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
     Note that this code assume df only contains data for one transaction
     """
     df = initial_df.copy()
-    df["has_depth_change"] = df["depth"] != df["depth"].shift(-1)
     if df["depth"].nunique() == 1:  # if transaction does not have depth changes
         # There is not need to fix gas cost
         df["op_gas_cost"] = df["gasCost"]
         return df
     else:  # if the transaction has depth changes...
-        call_list = [
-            "DELEGATECALL",
-            "CALL",
-            "CALLCODE",
-            "STATICCALL",
-            "CREATE",
-            "CREATE2",
-        ]
+        df["has_depth_increase"] = df["depth"] < df["depth"].shift(-1)
+        df["has_depth_decrease"] = df["depth"] > df["depth"].shift(-1)
+        df["has_depth_change"] = df["depth"] != df["depth"].shift(-1)
         inner_gas_diff_list = []
         outer_gas_diff_list = []
         change_depth_row_numbers = df[df["has_depth_change"]]["file_row_number"].values
@@ -124,13 +120,11 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
             row = filter_rows_df.iloc[i]
             next_row = filter_rows_df.iloc[i + 1]
             # if the row is a new depth starter
-            if (row["op"] in call_list) and (next_row["depth"] != row["depth"]):
-                # Get the next change of depth that is not a call-type
+            if row["has_depth_increase"]:
+                # Get the next row that decreases the depth
                 return_row = filter_rows_df[
                     (filter_rows_df["file_row_number"] > row["file_row_number"])
-                    & (~filter_rows_df["op"].isin(call_list))
-                    & (filter_rows_df["depth"] == row["depth"] + 1)
-                    & (filter_rows_df["has_depth_change"])
+                    & (filter_rows_df["has_depth_decrease"])
                 ].iloc[0]
                 # Get and save the available gas at entry and exit
                 ## inside the call
@@ -159,7 +153,7 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
         )
         # Merge with original df
         df = df.merge(call_cost_df, on="file_row_number", how="left").drop(
-            columns="has_depth_change"
+            columns=["has_depth_change", "has_depth_increase", "has_depth_decrease"]
         )
         df["op_gas_cost"] = np.where(
             df["op_gas_cost"].isna(), df["gasCost"], df["op_gas_cost"]
