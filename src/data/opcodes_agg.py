@@ -181,5 +181,50 @@ def main():
         df.to_parquet(output_file_path)
 
 
+def main_test(block_height: str, tx_hash: str = "*"):
+    # Paths
+    src_dir = os.path.dirname(os.path.abspath(__file__))
+    block_dir = os.path.abspath(os.path.join(src_dir, "..", "..", "data", "block_data"))
+    filename = os.path.join(
+        block_dir, f"block_height={block_height}", f"tx_hash={tx_hash}", "file.parquet"
+    )
+    # Query
+    query = f"""
+        SELECT block_height,
+            tx_hash,
+            file_row_number,
+            op,
+            gas,
+            gasCost,
+            depth
+        FROM read_parquet(
+                '{ filename }',
+                hive_partitioning = TRUE,
+                filename = True,
+                file_row_number = True,
+                union_by_name = True
+            );
+        """
+    # Execute the query and convert the result to a DataFrame
+    raw_df = duckdb.query(query).to_df()
+    # Fix issues with gas costs
+    clean_df = compute_gas_cost_for_chunk(raw_df)
+    # Aggregate data for memory efficiency
+    df = (
+        clean_df.groupby(["block_height", "tx_hash", "op", "op_gas_cost"])
+        .size()
+        .reset_index()
+    )
+    df.columns = [
+        "block_height",
+        "tx_hash",
+        "op",
+        "op_gas_cost",
+        "op_gas_pair_count",
+    ]
+    df.to_parquet("debug_df.parquet")
+
+
 if __name__ == "__main__":
-    main()
+    block_height = "22000040"
+    main_test(block_height)
