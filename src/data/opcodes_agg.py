@@ -63,8 +63,13 @@ def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
     unique_txs = df["tx_hash"].unique()
     new_df = pd.DataFrame()
     for tx_hash in unique_txs:
-        new_tx_df = compute_gas_costs_for_single_tx(df[df["tx_hash"] == tx_hash])
-        new_df = pd.concat([new_df, new_tx_df], ignore_index=True)
+        try:
+            tx_df = df[df["tx_hash"] == tx_hash]
+            new_tx_df = compute_gas_costs_for_single_tx(tx_df)
+            new_df = pd.concat([new_df, new_tx_df], ignore_index=True)
+        except Exception as e:
+            print(f"Error at transactions: {tx_hash}")
+            print(f"Exception: {e}")
     return new_df
 
 
