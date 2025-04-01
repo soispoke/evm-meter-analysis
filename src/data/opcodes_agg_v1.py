@@ -5,6 +5,8 @@ import argparse
 import pandas as pd
 from typing import List
 
+from .path_mng import chunks, get_parquet_path_patterns_in_range
+
 pd.options.mode.chained_assignment = None
 
 logging.basicConfig(
@@ -12,15 +14,15 @@ logging.basicConfig(
 )
 
 
-def aggregate_and_save_trace_data_for_block_range(
-    start_block: int,
-    end_block: int,
-    input_dir: str,
+def aggregate_and_save_trace_data_for_dirs_chunk(
+    dirs_chunk: List[str],
     output_dir: str,
 ) -> None:
+    # Get block ranges
+    start_block = dirs_chunk[0].split("/")[-3].split("=")[-1]
+    end_block = dirs_chunk[-1].split("/")[-3].split("=")[-1]
     logging.info(f"Start processing block range {start_block} .. {end_block}.")
-    # Define directories
-    input_dirs = os.path.join(input_dir, "block_height=*", "tx_hash=*", "file.parquet")
+    # Define output directory and file
     block_range_output_dir = os.path.join(
         output_dir, f"block_range={start_block}...{end_block}"
     )
@@ -42,7 +44,7 @@ def aggregate_and_save_trace_data_for_block_range(
                         ELSE gasCost
                     END AS gasCost_v2
                 FROM read_parquet(
-                    '{input_dirs}',
+                    { dirs_chunk },
                     hive_partitioning = TRUE,
                     filename = True,
                     file_row_number = True,
@@ -120,20 +122,13 @@ def main() -> None:
     start_block = config["start_block"]
     end_block = config["end_block"]
     chunk_size = config["chunk_size"]
-    end_chunk_list = list(range(start_block + chunk_size, end_block, chunk_size))
-    for chunk_end in end_chunk_list:
-        chunk_start = chunk_end - chunk_size
-        aggregate_and_save_trace_data_for_block_range(
-            chunk_start,
-            chunk_end,
-            input_data_dir,
-            output_data_dir,
-        )
-    if chunk_end < end_block:
-        aggregate_and_save_trace_data_for_block_range(
-            chunk_end,
-            end_block,
-            input_data_dir,
+    block_dirs = get_parquet_path_patterns_in_range(
+        input_data_dir, start_block, end_block
+    )
+    block_dirs_chunks = list(chunks(block_dirs, chunk_size))
+    for dirs_chunk in block_dirs_chunks:
+        aggregate_and_save_trace_data_for_dirs_chunk(
+            dirs_chunk,
             output_data_dir,
         )
 
