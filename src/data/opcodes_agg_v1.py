@@ -1,11 +1,14 @@
 import os
+import sys
 import duckdb
 import logging
 import argparse
 import pandas as pd
 from typing import List
+from pathlib import Path
 
-from .path_mng import chunks, get_parquet_path_patterns_in_range
+sys.path.append(str(Path(__file__).parent.parent))
+from data.path_mng import chunks, get_parquet_path_patterns_in_range
 
 pd.options.mode.chained_assignment = None
 

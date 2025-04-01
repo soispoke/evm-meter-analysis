@@ -1,4 +1,5 @@
 import os
+import sys
 import duckdb
 import logging
 import argparse
@@ -6,8 +7,10 @@ import traceback
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from pathlib import Path
 
-from .path_mng import chunks, get_parquet_path_patterns
+sys.path.append(str(Path(__file__).parent.parent))
+from data.path_mng import chunks, get_parquet_path_patterns
 
 
 pd.options.mode.chained_assignment = None
