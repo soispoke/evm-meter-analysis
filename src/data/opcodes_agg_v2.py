@@ -51,8 +51,12 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
     """
     df = initial_df.copy()
     if df["depth"].nunique() == 1:  # if transaction does not have depth changes
-        # There is not need to fix gas cost
-        df["op_gas_cost"] = df["gasCost"]
+        # We only need to fix calls
+        df["op_gas_cost"] = np.where(
+            df["op"].isin(["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]),
+            df["gas"] - df["gas"].shift(-1),
+            df["gasCost"],
+        )
         return df
     else:  # if the transaction has depth changes...
         df["has_depth_increase"] = df["depth"] < df["depth"].shift(-1)
@@ -82,6 +86,7 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
                 return_row = filter_rows_df[
                     (filter_rows_df["file_row_number"] > row["file_row_number"])
                     & (filter_rows_df["has_depth_decrease"])
+                    & (filter_rows_df["depth"] == row["depth"] + 1)
                 ].iloc[0]
                 # Get and save the available gas at entry and exit
                 ## inside the call
@@ -114,6 +119,13 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
         )
         df["op_gas_cost"] = np.where(
             df["op_gas_cost"].isna(), df["gasCost"], df["op_gas_cost"]
+        )
+        # Now, we only need to fix calls of same depth
+        df["op_gas_cost"] = np.where(
+            (df["op"].isin(["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]))
+            & (df["depth"] == df["depth"].shift(-1)),
+            df["gas"] - df["gas"].shift(-1),
+            df["op_gas_cost"],
         )
         return df
 
@@ -162,7 +174,7 @@ def main():
         block_range = f"{start_block_height}...{end_block_height}"
         output_dir = os.path.join(
             data_dir,
-            "aggregated_opcodes",
+            "aggregated_opcodes_v2",
             f"block_range={block_range}",
         )
         output_file_path = os.path.join(output_dir, "file.parquet")
