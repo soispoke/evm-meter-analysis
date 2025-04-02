@@ -33,6 +33,7 @@ h11==0.14.0
 httpcore==1.0.7
 httpx==0.28.1
 idna==3.10
+iniconfig==2.1.0
 ipykernel==6.29.5
 ipython==9.0.1
 ipython-genutils==0.2.0
@@ -78,6 +79,7 @@ pexpect==4.9.0
 pillow==11.1.0
 platformdirs==4.3.6
 ploomber-core==0.2.26
+pluggy==1.5.0
 polars==1.24.0
 posthog==3.18.1
 prettytable==3.15.1
@@ -90,6 +92,7 @@ pyarrow==19.0.1
 pycparser==2.22
 Pygments==2.19.1
 pyparsing==3.2.1
+pytest==8.3.5
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-json-logger==3.2.1
