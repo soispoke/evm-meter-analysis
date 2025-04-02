@@ -105,8 +105,8 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
             else:
                 inner_gas_diff_list.append(np.nan)
                 outer_gas_diff_list.append(np.nan)
-        # Compute the correct cost for the call opcodes
-        call_cost_df = pd.DataFrame(
+        # Compute the correct cost for the depth starter rows
+        depth_starter_cost_df = pd.DataFrame(
             {
                 "file_row_number": filter_rows_df["file_row_number"].values,
                 "op_gas_cost": np.array(outer_gas_diff_list + [np.nan])
@@ -114,7 +114,7 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
             }
         )
         # Merge with original df
-        df = df.merge(call_cost_df, on="file_row_number", how="left").drop(
+        df = df.merge(depth_starter_cost_df, on="file_row_number", how="left").drop(
             columns=["has_depth_change", "has_depth_increase", "has_depth_decrease"]
         )
         df["op_gas_cost"] = np.where(
