@@ -120,3 +120,30 @@ def test_sequence_calls():
     pd.testing.assert_frame_equal(
         result_df, expected_df, check_like=False, check_dtype=False
     )
+
+
+def test_failed_transaction():
+    # Test case where transaction failed from not enough available gas
+    input_data = {
+        "tx_hash": ["0x123"] * 4,
+        "op": [
+            "SWAP1",
+            "SSTORE",
+            "PUSH1",
+            "REVERT",
+        ],
+        "depth": [1] * 4,
+        "file_row_number": np.arange(4),
+        "gas": [4991, 4988, 260, 257],
+        "gasCost": [3, 20000, 3, 0],
+    }
+    input_df = pd.DataFrame(input_data)
+    # Expected result
+    expected_data = dict(input_data)
+    expected_data["op_gas_cost"] = [3, 4728, 3, 0]
+    expected_df = pd.DataFrame(expected_data)
+    # Actual result
+    result_df = compute_gas_costs_for_single_tx(input_df)
+    pd.testing.assert_frame_equal(
+        result_df, expected_df, check_like=False, check_dtype=False
+    )
