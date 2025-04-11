@@ -3,7 +3,7 @@ import opcode_types
 
 
 def split_opcode_gas_by_resource(
-    op: str, gas_cost: float, tx_hash: str = None
+    op: str, gas_cost: float, op_count: int, tx_hash: str = None
 ) -> Dict[str, float]:
     if gas_cost == 0.0:  # case when there is an out of gas error and cost is zero
         resource_dict = {"compute": 0.0}
@@ -36,7 +36,7 @@ def split_opcode_gas_by_resource(
                 resource_dict = {
                     "compute": 100.0,
                     "access": 0.0,
-                    "memory": gas_cost,
+                    "memory": gas_cost - 100.0,
                 }
         elif op in opcode_types.LOG:
             topics = int(op[-1])
@@ -74,16 +74,30 @@ def split_opcode_gas_by_resource(
 
         else:
             resource_dict = {"unassigned": gas_cost}
+    resource_dict = dict((k, op_count * v) for k, v in resource_dict.items())
     resource_dict["op"] = op
     if tx_hash is not None:
         resource_dict["tx_hash"] = tx_hash
     return resource_dict
 
 
-def main():
-    print(len(opcode_types.COMPUTE))
-    return
-
-
-if __name__ == "__main__":
-    main()
+def split_intrinsic_base_gas_by_resource(
+    gas_cost: float, tx_hash: str = None
+) -> Dict[str, float]:
+    if gas_cost == 21000.0:
+        resource_dict = {
+            "compute": 4300.0,
+            "history_growth": 6700.0,
+            "state_growth": 5000.0,
+            "access": 5000.0,
+        }
+    else:
+        resource_dict = {
+            "compute": 4300.0 + 1000.0,
+            "history_growth": 6700.0 * 2,
+            "state_growth": 5000.0 + 21800.0,
+            "access": 5000.0 + 2500.0,
+        }
+    if tx_hash is not None:
+        resource_dict["tx_hash"] = tx_hash
+    return resource_dict
