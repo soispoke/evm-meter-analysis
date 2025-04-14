@@ -335,13 +335,13 @@ def parse_configuration():
     parser.add_argument(
         "--block_count",
         type=int,
-        default=2,
+        default=6000,
         help="Number of blocks to process (default: 6000)",
     )
     parser.add_argument(
         "--reprocess",
         type=bool,
-        default=True,
+        default=False,
         help="Whether to reprocessed traces. Default is False.",
     )
     parser.add_argument(
