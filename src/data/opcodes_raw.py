@@ -168,7 +168,7 @@ class ErigonRPC:
         else:
             data = self._process_trace_response(response_str)
             if data:
-                logging.info(f"Trace fetched for block {block_height}, tx {tx_hash}")
+                logging.debug(f"Trace fetched for block {block_height}, tx {tx_hash}")
                 return data
             else:
                 return [
@@ -252,7 +252,9 @@ class BlockProcessor:
                 f"Failed to write traces to Parquet: {parquet_file_path}. Error: {e}"
             )
             return
-        logging.info(f"Transaction traces written to Parquet file: {parquet_file_path}")
+        logging.debug(
+            f"Transaction traces written to Parquet file: {parquet_file_path}"
+        )
 
     def _process_transaction(self, tx_hash, block_height):
         """Processes a single transaction: fetches trace and writes to parquet."""
@@ -274,7 +276,7 @@ class BlockProcessor:
         logging.debug(
             f"Processing block range from {block_start} to {block_start + block_count - 1}"
         )
-        for block_height in range(block_start, block_start + block_count):
+        for block_height in tqdm(range(block_start, block_start + block_count)):
             logging.debug(f"Processing block {block_height}")
             tx_hashes_to_process = self.get_tx_hashes_to_process(
                 block_height, reprocess
@@ -285,9 +287,10 @@ class BlockProcessor:
                 )
                 continue
             else:
-                logging.info(
-                    f"Parquet files missing for transactions {tx_hashes_to_process} in block {block_height}. Reprocessing these transactions."
-                )
+                if not reprocess:
+                    logging.info(
+                        f"Parquet files missing for transactions in block {block_height}. Reprocessing these transactions."
+                    )
                 block_dir = self.get_block_dir(block_height)
                 if not os.path.exists(block_dir):
                     os.makedirs(block_dir, exist_ok=True)
@@ -300,11 +303,7 @@ class BlockProcessor:
                         )
                         for tx_hash in tx_hashes_to_process
                     ]
-                    for future in tqdm(
-                        concurrent.futures.as_completed(futures),
-                        total=len(futures),
-                        desc=f"Processing block {block_height}",
-                    ):
+                    for future in concurrent.futures.as_completed(futures):
                         future.result()
                 logging.debug(f"Finished processing block {block_height}")
             logging.debug("Finished processing block range")
