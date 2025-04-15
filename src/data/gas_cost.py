@@ -1,28 +1,14 @@
-import os
-import sys
-import duckdb
 import logging
-import argparse
 import traceback
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).parent.parent))
-from data.path_mng import chunks, get_parquet_path_patterns
-
-
-pd.options.mode.chained_assignment = None
-
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
 
 
 def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Adds a new column to the raw debug trace data (df) with the correct gas cost for the CALL-type opcodes.
+    Adds a new column named `op_gas_cost` to df with the correct gas cost for the CALL-type opcodes
+    and contract creation opcodes. df must have at least the following columns: op, gas, gas_cost,
+    depth, file_row_number, tx_hash
     The dataframe can have multiple transactions.
     """
     unique_txs = df["tx_hash"].unique()
@@ -36,9 +22,9 @@ def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
             logging.error("Traceback:")
             traceback.print_exc()
             new_tx_df = tx_df.copy()
-            new_tx_df["op_gas_cost"] = new_tx_df["gasCost"]
+            new_tx_df["op_gas_cost"] = new_tx_df["gas_cost"]
             logging.error(
-                "The column op_gas_cost will be set to original gasCost. Continuing to process chunk."
+                "The column op_gas_cost will be set to original gas_cost. Continuing to process chunk."
             )
         new_df = pd.concat([new_df, new_tx_df], ignore_index=True)
     return new_df
@@ -46,8 +32,10 @@ def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
 
 def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Adds a new column to the raw debug trace data (df) with the correct gas cost for the CALL-type opcodes.
-    Note that this code assume df only contains data for one transaction
+    Adds a new column named `op_gas_cost` to initial_df with the correct gas cost for the
+    CALL-type opcodes and contract creation opcodes. initial_df must have at least the following
+    columns: op, gas, gas_cost, depth, file_row_number
+    Note that this code assume df only contains data for one transaction.
     """
     df = initial_df.copy()
     if df["depth"].nunique() == 1:  # if transaction does not have depth changes
@@ -55,7 +43,7 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
         df["op_gas_cost"] = np.where(
             df["op"].isin(["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]),
             df["gas"] - df["gas"].shift(-1),
-            df["gasCost"],
+            df["gas_cost"],
         )
         return df
     else:  # if the transaction has depth changes...
@@ -118,7 +106,7 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
             columns=["has_depth_change", "has_depth_increase", "has_depth_decrease"]
         )
         df["op_gas_cost"] = np.where(
-            df["op_gas_cost"].isna(), df["gasCost"], df["op_gas_cost"]
+            df["op_gas_cost"].isna(), df["gas_cost"], df["op_gas_cost"]
         )
         # Now, we only need to fix calls of same depth
         df["op_gas_cost"] = np.where(
@@ -130,96 +118,21 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
         return df
 
 
-def parse_configuration():
-    src_dir = os.path.dirname(os.path.abspath(__file__))
-    parser = argparse.ArgumentParser(
-        description="Loads data from EVM debug traces calculates the correct gas costs and aggregates the results."
-    )
-    parser.add_argument(
-        "--data_dir",
-        type=str,
-        default=os.path.abspath(os.path.join(src_dir, "..", "..", "data")),
-        help="Data directory (default: ./data). Used for both input and output.",
-    )
-    parser.add_argument(
-        "--reprocess",
-        type=bool,
-        default=False,
-        help="Whether to reprocessed blocks. Default is False.",
-    )
-    args = parser.parse_args()
-    config = {
-        "data_dir": args.data_dir,
-        "reprocess": args.reprocess,
-    }
-    return config
-
-
-def main():
-    config = parse_configuration()
-    # Directories
-    data_dir = config["data_dir"]
-    block_data_dir = os.path.join(data_dir, "block_data")
-    block_dirs = get_parquet_path_patterns(block_data_dir)
-    # block_dirs now contains paths to parquet files in valid block_height directories
-    chunk_size = 5
-    block_dirs_chunks = list(chunks(block_dirs, chunk_size))
-    total_chunks = len(block_dirs_chunks)
-    for dirs_chunk in tqdm(
-        block_dirs_chunks, total=total_chunks, desc="Processing chunks"
-    ):
-        # Define output directory path
-        start_block_height = dirs_chunk[0].split("/")[-3].split("=")[-1]
-        end_block_height = dirs_chunk[-1].split("/")[-3].split("=")[-1]
-        block_range = f"{start_block_height}...{end_block_height}"
-        output_dir = os.path.join(
-            data_dir,
-            "aggregated_opcodes_v2",
-            f"block_range={block_range}",
-        )
-        output_file_path = os.path.join(output_dir, "file.parquet")
-        if os.path.isfile(output_file_path) and config["reprocess"] == False:
-            logging.info(f"Block range {block_range} is already processed. Skipping...")
-            continue
-        logging.info(f"Start processing block range {block_range} ...")
-        # Define query
-        query = f"""
-        SELECT block_height,
-            tx_hash,
-            file_row_number,
-            op,
-            gas,
-            gasCost,
-            depth
-        FROM read_parquet(
-                { dirs_chunk },
-                hive_partitioning = TRUE,
-                filename = True,
-                file_row_number = True,
-                union_by_name = True
-            );
-        """
-        # Execute the query and convert the result to a DataFrame
-        raw_df = duckdb.query(query).to_df()
-        # Fix issues with gas costs
-        clean_df = compute_gas_cost_for_chunk(raw_df)
-        # Aggregate data for memory efficiency
-        df = (
-            clean_df.groupby(["block_height", "tx_hash", "op", "op_gas_cost"])
-            .size()
-            .reset_index()
-        )
-        df.columns = [
-            "block_height",
-            "tx_hash",
-            "op",
-            "op_gas_cost",
-            "op_gas_pair_count",
-        ]
-        # Save DataFrame to parquet
-        os.makedirs(output_dir, exist_ok=True)
-        df.to_parquet(output_file_path)
-
-
-if __name__ == "__main__":
-    main()
+def aggregate_gas_cost_data(df: pd.DataFrame) -> pd.DataFrame:
+    base_cols = [
+        "block_height",
+        "tx_hash",
+        "op",
+        "op_gas_cost",
+        "memory_expansion",
+        "memory_size",
+        "cum_refund",
+        "call_address",
+    ]
+    groupby_cols = []
+    for col in base_cols:
+        if col in df.columns:
+            groupby_cols.append(col)
+    agg_df = df.groupby(groupby_cols).size().reset_index()
+    agg_df = agg_df.rename(columns={0: "op_gas_pair_count"})
+    return agg_df

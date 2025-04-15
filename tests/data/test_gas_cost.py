@@ -9,7 +9,7 @@ project_root = str(Path(__file__).parent.parent.parent)
 src_dir = os.path.join(project_root, "src")
 sys.path.insert(0, src_dir)
 
-from data.opcodes_agg_v2 import compute_gas_costs_for_single_tx
+from data.gas_cost import compute_gas_costs_for_single_tx
 
 
 def test_no_depth_change_call():
@@ -20,7 +20,7 @@ def test_no_depth_change_call():
         "depth": [1] * 4,
         "file_row_number": np.arange(4),
         "gas": [186749, 186746, 177446, 177443],
-        "gasCost": [3, 11600, 3, 0],
+        "gas_cost": [3, 11600, 3, 0],
     }
     input_df = pd.DataFrame(input_data)
     # Expected result
@@ -42,7 +42,7 @@ def test_depth_change_call():
         "depth": [1, 1, 2, 2, 2, 1],
         "file_row_number": np.arange(6),
         "gas": [50076, 50074, 49194, 48573, 48570, 49350],
-        "gasCost": [2, 49294, 3, 3, 0, 3],
+        "gas_cost": [2, 49294, 3, 3, 0, 3],
     }
     input_df = pd.DataFrame(input_data)
     # Expected result
@@ -74,7 +74,7 @@ def test_nested_calls():
         "depth": [1, 1, 2, 2, 3, 3, 2, 2, 1],
         "file_row_number": np.arange(9),
         "gas": [1000, 998, 500, 497, 200, 198, 395, 392, 790],
-        "gasCost": [2, 600, 3, 300, 2, 0, 3, 0, 3],
+        "gas_cost": [2, 600, 3, 300, 2, 0, 3, 0, 3],
     }
     input_df = pd.DataFrame(input_data)
     # Expected result
@@ -108,7 +108,7 @@ def test_sequence_calls():
         "depth": [1, 1, 2, 2, 1, 1, 2, 2, 1],
         "file_row_number": np.arange(9),
         "gas": [1000, 998, 500, 497, 895, 897, 500, 497, 794],
-        "gasCost": [2, 600, 3, 0, 2, 600, 3, 0, 3],
+        "gas_cost": [2, 600, 3, 0, 2, 600, 3, 0, 3],
     }
     input_df = pd.DataFrame(input_data)
     # Expected result
@@ -135,7 +135,7 @@ def test_failed_transaction():
         "depth": [1] * 4,
         "file_row_number": np.arange(4),
         "gas": [4991, 4988, 260, 257],
-        "gasCost": [3, 20000, 3, 0],
+        "gas_cost": [3, 20000, 3, 0],
     }
     input_df = pd.DataFrame(input_data)
     # Expected result
