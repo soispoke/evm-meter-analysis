@@ -162,7 +162,7 @@ CUSTOM_TRACER = f"""
 
                 const call_opcodes = ["DELEGATECALL", "STATICCALL", "CALL", "CALLCODE"]
                 if(call_opcodes.includes(name)){{
-                    call_address = "0x"+log.stack.peek(1).toString(16);
+                    call_address = log.stack.peek(1).toString(16);
                 }} else {{
                     call_address = "";
                 }}

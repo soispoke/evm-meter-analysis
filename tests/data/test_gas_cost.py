@@ -9,7 +9,7 @@ project_root = str(Path(__file__).parent.parent.parent)
 src_dir = os.path.join(project_root, "src")
 sys.path.insert(0, src_dir)
 
-from data.gas_cost import compute_gas_costs_for_single_tx
+from data.gas_cost import fix_op_gas_costs_for_single_tx
 
 
 def test_no_depth_change_call():
@@ -28,7 +28,7 @@ def test_no_depth_change_call():
     expected_data["op_gas_cost"] = [3, 9300, 3, 0]
     expected_df = pd.DataFrame(expected_data)
     # Actual result
-    result_df = compute_gas_costs_for_single_tx(input_df)
+    result_df = fix_op_gas_costs_for_single_tx(input_df)
     pd.testing.assert_frame_equal(
         result_df, expected_df, check_like=False, check_dtype=False
     )
@@ -50,7 +50,7 @@ def test_depth_change_call():
     expected_data["op_gas_cost"] = [2, 100, 3, 3, 0, 3]
     expected_df = pd.DataFrame(expected_data)
     # Actual result
-    result_df = compute_gas_costs_for_single_tx(input_df)
+    result_df = fix_op_gas_costs_for_single_tx(input_df)
     pd.testing.assert_frame_equal(
         result_df, expected_df, check_like=False, check_dtype=False
     )
@@ -82,7 +82,7 @@ def test_nested_calls():
     expected_data["op_gas_cost"] = [2, 100, 3, 100, 2, 0, 3, 0, 3]
     expected_df = pd.DataFrame(expected_data)
     # Actual result
-    result_df = compute_gas_costs_for_single_tx(input_df)
+    result_df = fix_op_gas_costs_for_single_tx(input_df)
     print(result_df)
     print(expected_df)
     pd.testing.assert_frame_equal(
@@ -116,7 +116,7 @@ def test_sequence_calls():
     expected_data["op_gas_cost"] = [2, 100, 3, 0, 2, 100, 3, 0, 3]
     expected_df = pd.DataFrame(expected_data)
     # Actual result
-    result_df = compute_gas_costs_for_single_tx(input_df)
+    result_df = fix_op_gas_costs_for_single_tx(input_df)
     pd.testing.assert_frame_equal(
         result_df, expected_df, check_like=False, check_dtype=False
     )
@@ -143,7 +143,7 @@ def test_failed_transaction():
     expected_data["op_gas_cost"] = [3, 4728, 3, 0]
     expected_df = pd.DataFrame(expected_data)
     # Actual result
-    result_df = compute_gas_costs_for_single_tx(input_df)
+    result_df = fix_op_gas_costs_for_single_tx(input_df)
     pd.testing.assert_frame_equal(
         result_df, expected_df, check_like=False, check_dtype=False
     )
