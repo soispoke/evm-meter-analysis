@@ -37,7 +37,7 @@ def parse_configuration():
     parser.add_argument(
         "--reprocess",
         type=bool,
-        default=True,
+        default=False,
         help="Whether to reprocessed blocks. Default is False.",
     )
     parser.add_argument(
