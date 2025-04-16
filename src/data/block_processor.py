@@ -47,7 +47,7 @@ class BlockProcessor:
         # if the block folder does not exist, return all transactions
         elif not os.path.exists(block_dir):
             logging.info(
-                f"Block {block_height} not yet processed. Processing it for the first time."
+                f"Block {block_height} is not yet processed. Processing it for the first time."
             )
             return transaction_hashes
         # if the block folder exists, return only missing transactions
@@ -58,6 +58,14 @@ class BlockProcessor:
                 parquet_file_path = os.path.join(tx_dir, "file.parquet")
                 if not os.path.exists(parquet_file_path):
                     missing_tx_hashes.append(tx_hash)
+            if len(missing_tx_hashes) > 0:
+                logging.info(
+                    f"Parquet files missing for transactions in block {block_height}. Reprocessing these transactions."
+                )
+            else:
+                logging.info(
+                    f"Block {block_height} is already processed. Skipping block."
+                )
             return missing_tx_hashes
 
     def _write_traces_to_parquet(self, traces, block_height, tx_hash):
@@ -132,15 +140,8 @@ class BlockProcessor:
                 block_height, reprocess
             )
             if len(tx_hashes_to_process) == 0:
-                logging.info(
-                    f"Block {block_height} is already processed. Skipping block."
-                )
                 continue
             else:
-                if not reprocess:
-                    logging.info(
-                        f"Parquet files missing for transactions in block {block_height}. Reprocessing these transactions."
-                    )
                 block_dir = self.get_block_dir(block_height)
                 if not os.path.exists(block_dir):
                     os.makedirs(block_dir, exist_ok=True)
