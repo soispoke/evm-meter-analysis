@@ -13,7 +13,7 @@ from data.path_mng import (
     get_parquet_path_patterns,
     get_parquet_path_patterns_in_range,
 )
-from data.gas_cost import compute_gas_cost_for_chunk, aggregate_gas_cost_data
+from data.gas_cost import fix_op_gas_cost_for_chunk, aggregate_op_gas_cost_data
 
 
 pd.options.mode.chained_assignment = None
@@ -114,9 +114,9 @@ def main():
         # Execute the query and convert the result to a DataFrame
         raw_df = duckdb.query(query).to_df()
         # Fix issues with gas costs
-        clean_df = compute_gas_cost_for_chunk(raw_df)
+        clean_df = fix_op_gas_cost_for_chunk(raw_df)
         # Aggregate data for memory efficiency
-        df = aggregate_gas_cost_data(clean_df)
+        df = aggregate_op_gas_cost_data(clean_df)
         # Save DataFrame to parquet
         os.makedirs(output_dir, exist_ok=True)
         df.to_parquet(output_file_path)

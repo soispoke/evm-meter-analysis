@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 
-def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
+def fix_op_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
     """
     Adds a new column named `op_gas_cost` to df with the correct gas cost for the CALL-type opcodes
     and contract creation opcodes. df must have at least the following columns: op, gas, gas_cost,
@@ -16,7 +16,7 @@ def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
     for tx_hash in unique_txs:
         tx_df = df[df["tx_hash"] == tx_hash]
         try:
-            new_tx_df = compute_gas_costs_for_single_tx(tx_df)
+            new_tx_df = fix_op_gas_costs_for_single_tx(tx_df)
         except:
             logging.error(f"Error at transaction: {tx_hash}")
             logging.error("Traceback:")
@@ -30,7 +30,7 @@ def compute_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
     return new_df
 
 
-def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
+def fix_op_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
     """
     Adds a new column named `op_gas_cost` to initial_df with the correct gas cost for the
     CALL-type opcodes and contract creation opcodes. initial_df must have at least the following
@@ -118,7 +118,7 @@ def compute_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
         return df
 
 
-def aggregate_gas_cost_data(df: pd.DataFrame) -> pd.DataFrame:
+def aggregate_op_gas_cost_data(df: pd.DataFrame) -> pd.DataFrame:
     base_cols = [
         "block_height",
         "tx_hash",

@@ -86,18 +86,31 @@ def split_intrinsic_base_gas_by_resource(
 ) -> Dict[str, float]:
     if gas_cost == 21000.0:
         resource_dict = {
-            "compute": 4300.0,
-            "history_growth": 6700.0,
-            "state_growth": 5000.0,
-            "access": 5000.0,
+            "compute": 8500.0,
+            "history_growth": 6500.0,
+            "access": 300.0,
+            "block_size": 5700.0,
         }
     else:
         resource_dict = {
-            "compute": 4300.0 + 1000.0,
-            "history_growth": 6700.0 * 2,
-            "state_growth": 5000.0 + 21800.0,
-            "access": 5000.0 + 2500.0,
+            "compute": 8500.0 + 1000.0,
+            "history_growth": 6500 + 6700.0,
+            "state_growth": 21800.0,
+            "access": 300.0 + 2500.0,
+            "block_size": 5700.0,
         }
+    if tx_hash is not None:
+        resource_dict["tx_hash"] = tx_hash
+    return resource_dict
+
+
+def split_input_data_gas_by_resource(
+    zero_bytes: float, non_zero_bytes: float, tx_hash: str = None
+) -> Dict[str, float]:
+    resource_dict = {
+        "history_growth": zero_bytes * 0.5 + non_zero_bytes * 5.0,
+        "block_size": zero_bytes * 3.5 + non_zero_bytes * 11.0,
+    }
     if tx_hash is not None:
         resource_dict["tx_hash"] = tx_hash
     return resource_dict
