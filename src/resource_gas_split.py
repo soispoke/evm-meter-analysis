@@ -6,6 +6,19 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent))
 import opcode_types
 
+PRECOMPILE_MAP = {
+    1: {"name": "ecRecover", "fixed_cost": 3000.0},
+    2: {"name": "SHA2-256", "fixed_cost": 60.0},
+    3: {"name": "RIPEMD-160", "fixed_cost": 600.0},
+    4: {"name": "identity", "fixed_cost": 15.0},
+    5: {"name": "modexp", "fixed_cost": 200.0},
+    6: {"name": "ecAdd", "fixed_cost": 150.0},
+    7: {"name": "ecMul", "fixed_cost": 6000.0},
+    8: {"name": "ecPairing", "fixed_cost": 45000.0},
+    9: {"name": "blake2f", "fixed_cost": 0.0},
+    10: {"name": "point_evaluation", "fixed_cost": 50000.0},
+}
+
 
 def compute_resource_gas_cost_per_tx(
     agg_trace_df: pd.DataFrame,
@@ -71,6 +84,7 @@ def compute_opcode_gas_by_resource(agg_trace_df: pd.DataFrame) -> pd.DataFrame:
             x["op_gas_pair_count"],
             x["post_memory_size"],
             x["memory_expansion"],
+            x["call_address"],
             x["tx_hash"],
         ),
         axis=1,
@@ -118,6 +132,7 @@ def split_opcode_gas_by_resource(
     op_count: int,
     post_memory_size: int = None,
     expansion_size: int = None,
+    call_address: str = None,
     tx_hash: str = None,
 ) -> Dict[str, float]:
     # Compute memory expansion cost
@@ -149,11 +164,22 @@ def split_opcode_gas_by_resource(
                 "Memory": memory_expansion_cost,
             }
         elif (op in opcode_types.EXTCODECOPY) or (op in opcode_types.CALLS):
-            resource_dict = {
-                "Compute": 100.0,
-                "Access": gas_cost - 100.0 - memory_expansion_cost,
-                "Memory": memory_expansion_cost,
-            }
+            precompile_fixed_cost = map_precompile_fixed_cost(call_address)
+            remaining_cost = gas_cost - 100.0 - precompile_fixed_cost
+            if remaining_cost < 2500:
+                # Assume warm access - key assunmption: dynamic cost of precompile is less than 2500!
+                resource_dict = {
+                    "Compute": gas_cost - memory_expansion_cost,
+                    "Access": 0.0,
+                    "Memory": memory_expansion_cost,
+                }
+            else:
+                # Assume cold access
+                resource_dict = {
+                    "Compute": gas_cost - 2500.0 - memory_expansion_cost,
+                    "Access": 2500.0,
+                    "Memory": memory_expansion_cost,
+                }
         elif op in opcode_types.LOG:
             topics = int(op[-1])
             resource_dict = {
@@ -243,3 +269,32 @@ def compute_memory_expansion_cost(post_memory_size: int, expansion_size: int) ->
     # Expansion cost
     expansion_cost = post_cost - pre_cost
     return expansion_cost
+
+
+def is_precompile(call_address: str) -> bool:
+    try:
+        call_address_int = int(call_address, 16)
+        if call_address_int <= 10:
+            return True
+        else:
+            return False
+    except:
+        return False
+
+
+def map_precompile(call_address: str) -> int | None:
+    if is_precompile(call_address):
+        call_address_int = int(call_address, 16)
+        precompile = PRECOMPILE_MAP.get(call_address_int).get("name")
+    else:
+        precompile = None
+    return precompile
+
+
+def map_precompile_fixed_cost(call_address: str) -> float:
+    if is_precompile(call_address):
+        call_address_int = int(call_address, 16)
+        cost = PRECOMPILE_MAP.get(call_address_int).get("fixed_cost")
+    else:
+        cost = 0.0
+    return cost
