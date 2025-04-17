@@ -187,6 +187,7 @@ CUSTOM_TRACER = f"""
                 gas: log.getGas(),
                 gas_cost: log.getCost(),
                 depth: log.getDepth(),
+                post_memory_size,
                 memory_expansion,
                 memory_size,
                 cum_refund,

@@ -124,6 +124,7 @@ def aggregate_op_gas_cost_data(df: pd.DataFrame) -> pd.DataFrame:
         "tx_hash",
         "op",
         "op_gas_cost",
+        "post_memory_size",
         "memory_expansion",
         "memory_size",
         "cum_refund",
