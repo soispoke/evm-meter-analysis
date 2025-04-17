@@ -136,3 +136,88 @@ def aggregate_op_gas_cost_data(df: pd.DataFrame) -> pd.DataFrame:
     agg_df = df.groupby(groupby_cols).size().reset_index()
     agg_df = agg_df.rename(columns={0: "op_gas_pair_count"})
     return agg_df
+
+
+def compute_component_gas_costs_per_tx(
+    agg_trace_df: pd.DataFrame, tx_gas_info_df: pd.DataFrame, avail_gas_df: pd.DataFrame
+) -> pd.DataFrame:
+    # Get total cost and input data cost
+    comp_df = tx_gas_info_df[
+        ["block_height", "tx_hash", "tx_gas_cost", "tx_input_data_cost"]
+    ].copy()
+    comp_df = comp_df.rename(
+        columns={
+            "tx_gas_cost": "total_gas_cost",
+            "tx_input_data_cost": "input_data_cost",
+        }
+    )
+    # Get base intrinsic cost
+    intrinsic_base_df = get_intrinsic_base_cost_per_tx(tx_gas_info_df)
+    comp_df = comp_df.merge(intrinsic_base_df, on="tx_hash", how="outer")
+    # Get opcode cost
+    opcode_df = get_opcode_gas_cost(agg_trace_df)
+    comp_df = comp_df.merge(opcode_df, on="tx_hash", how="outer")
+    # Get gas refund
+    refund_df = get_gas_refunds_per_tx(agg_trace_df)
+    comp_df = comp_df.merge(refund_df, on="tx_hash", how="outer")
+    # Get intrinsic access cost
+    # Currently estimating it from the other components...
+    # TODO: Fix the estimation function get_intrinsic_access_cost_per_tx
+    comp_df["intrinsic_access_cost"] = (
+        comp_df["total_gas_cost"]
+        - comp_df["intrinsic_base_cost"]
+        - comp_df["input_data_cost"]
+        - comp_df["op_gas_cost"]
+        + comp_df["gas_refund"]
+    )
+    return comp_df
+
+
+def get_intrinsic_base_cost_per_tx(tx_gas_info_df: pd.DataFrame) -> pd.DataFrame:
+    df = tx_gas_info_df[["tx_hash", "is_contract_creation"]].copy()
+    df["intrinsic_base_cost"] = np.where(
+        df["is_contract_creation"] == 1, 53000.0, 21000.0
+    )
+    df = df.drop(columns="is_contract_creation")
+    return df
+
+
+def get_opcode_gas_cost(agg_trace_df: pd.DataFrame) -> pd.DataFrame:
+    df = (
+        agg_trace_df.groupby("tx_hash")["op_total_gas_cost"]
+        .sum()
+        .reset_index(name="op_gas_cost")
+    )
+    return df
+
+
+def get_intrinsic_access_cost_per_tx(
+    tx_gas_info_df: pd.DataFrame,
+    avail_gas_df: pd.DataFrame,
+) -> pd.DataFrame:
+    df = avail_gas_df.merge(tx_gas_info_df, on="tx_hash", how="inner")
+    # Check if tx is simple - an ETH transfer or a call data transaction
+    df["is_simple_tx"] = df["tx_gas_cost"] == (21000.0 + df["tx_input_data_cost"])
+    # if it simple, no intrinsic access cost. if not simple, compute access cost
+    df["intrinsic_access_cost"] = np.where(
+        df["is_simple_tx"],
+        0.0,
+        df["tx_gas_limit"] - df["tx_avail_gas"] - df["tx_input_data_cost"] - 21000.0,
+    )
+    # futher discount base intrinsic cost if the tx is a contraction creation
+    df["intrinsic_access_cost"] = np.where(
+        df["is_contract_creation"],
+        df["intrinsic_access_cost"] - 32000.0,
+        df["intrinsic_access_cost"],
+    )
+    df = df[["tx_hash", "intrinsic_access_cost"]]
+    return df
+
+
+def get_gas_refunds_per_tx(agg_trace_df: pd.DataFrame) -> pd.DataFrame:
+    df = (
+        agg_trace_df.groupby("tx_hash")["cum_refund"]
+        .max()
+        .reset_index(name="gas_refund")
+    )
+    return df
