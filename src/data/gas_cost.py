@@ -140,7 +140,8 @@ def aggregate_op_gas_cost_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def compute_component_gas_costs_per_tx(
-    agg_trace_df: pd.DataFrame, tx_gas_info_df: pd.DataFrame, avail_gas_df: pd.DataFrame
+    agg_trace_df: pd.DataFrame,
+    tx_gas_info_df: pd.DataFrame,
 ) -> pd.DataFrame:
     # Get total cost and input data cost
     comp_df = tx_gas_info_df[
@@ -161,6 +162,8 @@ def compute_component_gas_costs_per_tx(
     # Get gas refund
     refund_df = get_gas_refunds_per_tx(agg_trace_df)
     comp_df = comp_df.merge(refund_df, on="tx_hash", how="outer")
+    # Fill nan
+    comp_df = comp_df.fillna(0.0)
     # Get intrinsic access cost
     # Currently estimating it from the other components...
     # TODO: Fix the estimation function get_intrinsic_access_cost_per_tx
