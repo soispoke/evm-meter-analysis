@@ -1,5 +1,4 @@
 import os
-import gc
 import sys
 import json
 import logging
