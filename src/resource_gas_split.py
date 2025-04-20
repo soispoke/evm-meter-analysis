@@ -274,7 +274,7 @@ def compute_memory_expansion_cost(post_memory_size: int, expansion_size: int) ->
 def is_precompile(call_address: str) -> bool:
     try:
         call_address_int = int(call_address, 16)
-        if call_address_int <= 10:
+        if call_address_int in PRECOMPILE_MAP.keys():
             return True
         else:
             return False
