@@ -116,15 +116,11 @@ def main():
         raw_df = duckdb.query(query).to_df()
         # Fix issues with gas costs
         clean_df = fix_op_gas_cost_for_chunk(raw_df)
-        del raw_df
         # Aggregate data for memory efficiency
         df = aggregate_op_gas_cost_data(clean_df)
-        del clean_df
         # Save DataFrame to parquet
         os.makedirs(output_dir, exist_ok=True)
         df.to_parquet(output_file_path)
-        del df
-        gc.collect()
 
 
 if __name__ == "__main__":
