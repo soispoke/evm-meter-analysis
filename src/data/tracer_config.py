@@ -123,6 +123,8 @@ INSTRUCTIONS = {
     },
 }
 
+# Inspired by https://github.com/raxhvl/evm-memory-analysis/blob/main/memory-tracer/tracer/rpc.py
+# Learn more at https://geth.ethereum.org/docs/developers/evm-tracing/custom-tracer
 CUSTOM_TRACER = f"""
     {{
         data: [],
