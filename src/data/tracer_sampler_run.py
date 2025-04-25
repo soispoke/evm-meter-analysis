@@ -4,6 +4,7 @@ import json
 import logging
 import argparse
 import numpy as np
+from tqdm import tqdm
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).parent.parent))
@@ -205,11 +206,11 @@ def main():
     block_start = config["block_start"]
     block_end = config["block_end"]
     block_count = config["block_count"]
-    sampled_block_heights = np.random.randint(block_start, block_end, 2)
+    sampled_block_heights = np.random.randint(block_start, block_end, block_count)
     sampled_block_heights.sort()
     sampled_block_heights = sampled_block_heights.tolist()
     # Process sampled blocks
-    for block_height in sampled_block_heights:
+    for block_height in tqdm(sampled_block_heights):
         logging.debug(f"Processing block {block_height}")
         # Fetch raw data from debug traces
         raw_df = block_processor.fetch_block(block_height)
