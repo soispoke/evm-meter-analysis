@@ -165,7 +165,9 @@ def split_opcode_gas_by_resource(
             }
         elif (op in opcode_types.EXTCODECOPY) or (op in opcode_types.CALLS):
             precompile_fixed_cost = map_precompile_fixed_cost(call_address)
-            remaining_cost = gas_cost - 100.0 - precompile_fixed_cost
+            remaining_cost = (
+                gas_cost - 100.0 - precompile_fixed_cost - memory_expansion_cost
+            )
             if remaining_cost < 2500:
                 # Assume warm access - key assunmption: dynamic cost of precompile is less than 2500!
                 resource_dict = {
