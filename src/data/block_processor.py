@@ -8,14 +8,45 @@ from tqdm import tqdm
 import concurrent.futures
 from typing import List
 from pathlib import Path
+from sqlalchemy import text          
 
 sys.path.append(str(Path(__file__).parent.parent))
 from data.rpc import XatuClickhouse, ErigonRPC
 
 
 class BlockProcessor:
+    def get_block_dir(self, block_height):
+        return os.path.join(self.raw_data_dir, f"block_height={block_height}")
     """Key functionality to process trace data for blocks"""
 
+    # ──────────────────────────────────────────────────────────
+    #  internal helper that avoids ClickHouse bind‑param bug
+    # ──────────────────────────────────────────────────────────
+    def _safe_get_tx_hashes_for_block(self, height: int) -> List[str]:
+        """
+        Return list of tx hashes for `height`, embedding the block‑number literal
+        to avoid the ClickHouse parameter‑escaping bug, and wrapping the SQL in
+        sqlalchemy.text so the driver accepts it.
+        """
+        sql = f"""
+            SELECT transaction_hash
+            FROM default.canonical_execution_transaction
+            WHERE block_number = {height}
+              AND meta_network_name = 'mainnet'
+            ORDER BY transaction_index ASC
+        """
+        try:
+            with self.xatu_clickhouse_fetcher.db_engine.connect() as conn:
+                #   ↓↓↓ wrap with text()  ↓↓↓
+                result = conn.execute(text(sql))
+                return [row[0] for row in result.fetchall()]
+        except Exception as exc:
+            logging.error("ClickHouse query failed for block %d: %s", height, exc)
+            return []
+
+    # ──────────────────────────────────────────────────────────
+    #  rest of __init__ unchanged
+    # ──────────────────────────────────────────────────────────
     def __init__(
         self,
         raw_data_dir: str,
@@ -27,46 +58,40 @@ class BlockProcessor:
         self.xatu_clickhouse_fetcher = xatu_clickhouse_fetcher
         self.erigon_rpc = erigon_rpc
         self.thread_pool_size = thread_pool_size
-
-    def get_block_dir(self, block_height):
-        return os.path.join(self.raw_data_dir, f"block_height={block_height}")
+    # ---------------------------------------------------------------------
 
     def get_tx_hashes_to_process(self, block_height: int, reprocess: bool) -> List[str]:
         """
         Return the list of transaction hashes to process.
-        If reprocess=False, checks if a block is fully processed or whether there are missing transactions.
+        If reprocess=False, checks if a block is fully processed or whether there
+        are missing transactions.
         """
-        transaction_hashes = self.xatu_clickhouse_fetcher.get_tx_hashes_for_block(
-            block_height
-        )
+        # ①  use the safe query instead of the buggy driver call
+        transaction_hashes = self._safe_get_tx_hashes_for_block(block_height)
+
         block_dir = self.get_block_dir(block_height)
-        # if we want to reprocess, return all transactions
+
         if reprocess:
-            logging.info(f"Reprocessing block {block_height}.")
+            logging.info("Reprocessing block %d.", block_height)
             return transaction_hashes
-        # if the block folder does not exist, return all transactions
-        elif not os.path.exists(block_dir):
-            logging.info(
-                f"Block {block_height} is not yet processed. Processing it for the first time."
-            )
+
+        if not os.path.exists(block_dir):
+            logging.info("Block %d not yet processed; processing it now.", block_height)
             return transaction_hashes
-        # if the block folder exists, return only missing transactions
+
+        # existing “missing‑file” logic unchanged …
+        missing = []
+        for txh in transaction_hashes:
+            pq = os.path.join(block_dir, f"tx_hash={txh}", "file.parquet")
+            if not os.path.exists(pq):
+                missing.append(txh)
+
+        if missing:
+            logging.info("Block %d missing %d tx parquet(s); re‑processing those.",
+                         block_height, len(missing))
         else:
-            missing_tx_hashes = []
-            for tx_hash in transaction_hashes:
-                tx_dir = os.path.join(block_dir, f"tx_hash={tx_hash}")
-                parquet_file_path = os.path.join(tx_dir, "file.parquet")
-                if not os.path.exists(parquet_file_path):
-                    missing_tx_hashes.append(tx_hash)
-            if len(missing_tx_hashes) > 0:
-                logging.info(
-                    f"Parquet files missing for transactions in block {block_height}. Reprocessing these transactions."
-                )
-            else:
-                logging.info(
-                    f"Block {block_height} is already processed. Skipping block."
-                )
-            return missing_tx_hashes
+            logging.info("Block %d already fully processed; skipping.", block_height)
+        return missing_tx_hashes
 
     def _write_traces_to_parquet(self, traces, block_height, tx_hash):
         """Writes transaction traces to Parquet file."""

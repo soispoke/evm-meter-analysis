@@ -3,32 +3,100 @@ import traceback
 import numpy as np
 import pandas as pd
 
+PRECOMPILE_MAP = {
+    1:  {"name": "ecRecover",        "fixed_cost": 3000.0},
+    2:  {"name": "SHA2-256",         "fixed_cost":   60.0},
+    3:  {"name": "RIPEMD-160",       "fixed_cost":  600.0},
+    4:  {"name": "identity",         "fixed_cost":   15.0},
+    5:  {"name": "modexp",           "fixed_cost":  200.0},
+    6:  {"name": "ecAdd",            "fixed_cost":  150.0},
+    7:  {"name": "ecMul",            "fixed_cost": 6000.0},
+    8:  {"name": "ecPairing",        "fixed_cost":45000.0},
+    9:  {"name": "blake2f",          "fixed_cost":    0.0},
+    10: {"name": "point_evaluation", "fixed_cost":50000.0},
+}
 
+PRECOMPILE_NAMES = {info["name"] for info in PRECOMPILE_MAP.values()}
+
+def is_precompile(addr_hex: str) -> bool:
+    try:
+        return int(addr_hex, 16) in PRECOMPILE_MAP
+    except ValueError:
+        return False
+
+def map_precompile(addr_hex: str) -> str | None:
+    return PRECOMPILE_MAP[int(addr_hex, 16)]["name"] if is_precompile(addr_hex) else None
+
+def map_precompile_fixed_cost(addr_hex: str) -> float:
+    return PRECOMPILE_MAP[int(addr_hex, 16)]["fixed_cost"] if is_precompile(addr_hex) else 0.0
+
+# ───────────────────────────────────────────────────────────────
+# 2.  Memory‑expansion gas from the yellow‑paper formula
+# ───────────────────────────────────────────────────────────────
+def _memory_expansion_cost(post_sz: int, expansion: int) -> int:
+    if expansion <= 0:
+        return 0
+    pre_sz  = post_sz - expansion
+    w_pre   = (pre_sz  + 31) // 32
+    w_post  = (post_sz + 31) // 32
+    return (w_post**2 // 512 + 3 * w_post) - (w_pre**2 // 512 + 3 * w_pre)
+
+# ───────────────────────────────────────────────────────────────
+# 3.  Constants for the compute‑only heuristic
+# ───────────────────────────────────────────────────────────────
+CALL_BASE             = 100.0
+COLD_ACCESS_SURCHARGE  = 2500.0
+
+# ───────────────────────────────────────────────────────────────
+# 4.  Main fixer
+# ───────────────────────────────────────────────────────────────
 def fix_op_gas_cost_for_chunk(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Adds a new column named `op_gas_cost` to df with the correct gas cost for the CALL-type opcodes
-    and contract creation opcodes. df must have at least the following columns: op, gas, gas_cost,
-    depth, file_row_number, tx_hash
-    The dataframe can have multiple transactions.
+    Adds `compute_gas_cost` for every execution:
+      compute = op_gas_cost
+                – memory_expansion_cost
+                – 100                 (CALL base)
+                – 2500 if cold access (heuristic)
+    Also renames STATICCALL/CALL rows to their pre‑compile mnemonic.
     """
-    unique_txs = df["tx_hash"].unique()
-    new_df = pd.DataFrame()
-    for tx_hash in unique_txs:
-        tx_df = df[df["tx_hash"] == tx_hash]
-        try:
-            new_tx_df = fix_op_gas_costs_for_single_tx(tx_df)
-        except:
-            logging.error(f"Error at transaction: {tx_hash}")
-            logging.error("Traceback:")
-            traceback.print_exc()
-            new_tx_df = tx_df.copy()
-            new_tx_df["op_gas_cost"] = new_tx_df["gas_cost"]
-            logging.error(
-                "The column op_gas_cost will be set to original gas_cost. Continuing to process chunk."
-            )
-        new_df = pd.concat([new_df, new_tx_df], ignore_index=True)
-    return new_df
+    out_frames = []
 
+    for tx_hash in df["tx_hash"].unique():
+        tx_df = df[df["tx_hash"] == tx_hash]
+
+        # your existing depth‑aware cost fixer
+        try:
+            fixed_df = fix_op_gas_costs_for_single_tx(tx_df)
+        except Exception:
+            logging.error(f"Gas‑fix failed for tx {tx_hash}", exc_info=True)
+            fixed_df = tx_df.copy()
+            fixed_df["op_gas_cost"] = fixed_df["gas_cost"]
+
+        # Rename any pre‑compile target
+        fixed_df["op"] = fixed_df["call_address"].apply(map_precompile).fillna(fixed_df["op"])
+
+        # Compute‑only column
+        def _compute_cost(row):
+            if row["op"] not in PRECOMPILE_NAMES:
+                return row["op_gas_cost"]          # ordinary opcode
+
+            mem_cost   = _memory_expansion_cost(row["post_memory_size"], row["memory_expansion"])
+            fixed_cost = map_precompile_fixed_cost(row["call_address"])
+
+            # Heuristic: decide cold after subtracting *both* fixed & mem cost
+            cold = (row["op_gas_cost"] - CALL_BASE - fixed_cost - mem_cost) >= COLD_ACCESS_SURCHARGE
+
+            return (
+                row["op_gas_cost"]
+                - mem_cost
+                - CALL_BASE
+                - (COLD_ACCESS_SURCHARGE if cold else 0.0)
+            )
+
+        fixed_df["compute_gas_cost"] = fixed_df.apply(_compute_cost, axis=1)
+        out_frames.append(fixed_df)
+
+    return pd.concat(out_frames, ignore_index=True)
 
 def fix_op_gas_costs_for_single_tx(initial_df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -123,19 +191,24 @@ def aggregate_op_gas_cost_data(df: pd.DataFrame) -> pd.DataFrame:
         "block_height",
         "tx_hash",
         "op",
-        "op_gas_cost",
         "post_memory_size",
         "memory_expansion",
         "memory_size",
         "cum_refund",
         "call_address",
     ]
-    groupby_cols = []
-    for col in base_cols:
-        if col in df.columns:
-            groupby_cols.append(col)
-    agg_df = df.groupby(groupby_cols).size().reset_index()
-    agg_df = agg_df.rename(columns={0: "op_gas_pair_count"})
+    groupby_cols = [c for c in base_cols if c in df.columns]
+
+    agg_df = (
+        df
+        .groupby(groupby_cols)
+        .agg(
+            op_gas_pair_count = ("op_gas_cost",     "size"),   # how many executions
+            op_gas_cost_sum   = ("op_gas_cost",     "sum"),    # full EVM charge total
+            compute_gas_sum   = ("compute_gas_cost","sum"),    # compute‑only total
+        )
+        .reset_index()
+    )
     return agg_df
 
 
